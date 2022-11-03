@@ -4,7 +4,8 @@ import math
 import time
 
 
-def compute_ground_sampling_distance(focal_distance=18, sensor_width=22.3, flight_height=5, image_width=5184):
+def compute_ground_sampling_distance(focal_distance=18, sensor_width=22.3, flight_height=5, image_width=5184,
+                                     image_height=3456):
     gsd = round((sensor_width * flight_height * 100) / (focal_distance * image_width),3)     # cm/pixel
     return gsd
 
