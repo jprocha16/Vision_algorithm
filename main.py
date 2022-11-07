@@ -4,20 +4,23 @@ import math
 import time
 
 
-def compute_ground_sampling_distance(focal_distance=18, sensor_width=22.3, flight_height=5, image_width=5184,
-                                     image_height=3456):
-    gsd = round((sensor_width * flight_height * 100) / (focal_distance * image_width),3)     # cm/pixel
+def compute_ground_sampling_distance(focal_distance, sensor_width, flight_height, image_width,
+                                     image_height):
+    gsd = round((sensor_width * flight_height * 100) / (focal_distance * image_width), 3)     # cm/pixel
     return gsd
 
 
-def compute_expected_target_size(gsd, target_dimension):
-    max_radius = int(round(target_dimension / gsd, 0))     # size in pixels
+def compute_max_ring_size(gsd, outer_ring_radius):
+    max_radius = int(round((outer_ring_radius / gsd) + 10, 0))     # size in pixels
     return max_radius
 
+def compute_min_ring_size(gsd, inner_ring_radius):
+    min_radius = int(round((inner_ring_radius / gsd) - 10, 0))     # size in pixels
+    return min_radius
 
 def detect_circles(im: np.ndarray, minR: int=0, maxR: int=0):
     circles = []
-    step = 5
+    step = 30
     for maxR in range(minR+step, maxR, step):
         new_circles = cv2.HoughCircles(im, cv2.HOUGH_GRADIENT, 1, 100,
                                    param1=100, param2=100, minRadius=minR, maxRadius=maxR)
@@ -52,7 +55,7 @@ def get_unique_circles(circles_input, strategy='mean'):
 
         # search for similar circles to c1
         for c2 in circles_input:
-            if is_similar(c1, c2, center_error=30, radius_error=6):     #TODO: create a function to determine the center and radius error depending on the flight_height
+            if is_similar(c1, c2, center_error=30, radius_error=27):     #TODO: create a function to determine the center and radius error depending on the flight_height
                 similar.append(c2)
 
         # remove similar circles from original list
@@ -104,7 +107,7 @@ def combined_circles(similar, strategy):
         return similar[0]
 
 
-def get_concentric_circles(circles_input, center_error=30):
+def get_concentric_circles(circles_input, concentric_error=25):
     '''
     :param circles_input: list of circles, each circle a tuple with center and radius
     :param center_error:
@@ -116,7 +119,7 @@ def get_concentric_circles(circles_input, center_error=30):
         group = [circle]
         for (x1, y1, r1) in circles_input:
             (x2, y2, r2) = group[-1]
-            if math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) < center_error:
+            if math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) < concentric_error:
                 group.append((x1, y1, r1))
         for circle in group:
             if circle in circles_input:
@@ -141,16 +144,16 @@ def compare_ratio_sequence(ratios_list):
     list_match = []
     for obs in range(0, len(ratios_list)):
         for real in range(0, len(signature)):
-            upper_lim = signature[real] + 0.02
-            lower_lim = signature[real] - 0.02
+            upper_lim = signature[real] + 0.025
+            lower_lim = signature[real] - 0.0249
             if ratios_list[obs] <= upper_lim and ratios_list[obs] >= lower_lim:
                 list_match.append([obs, real])
     return list_match
 
 
 def main():
-    image = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/5m/IMG_8519.JPG", 0)
-    output = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/5m/IMG_8519.JPG", 1)
+    image = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/2m/IMG_8517.JPG", 0)
+    output = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/2m/IMG_8517.JPG", 1)
 
     cv2.namedWindow('original image', cv2.WINDOW_KEEPRATIO)
     cv2.imshow('original image', output)
@@ -163,15 +166,18 @@ def main():
     cv2.resizeWindow('blurred image', 700, 700)
     #cv2.waitKey()
 
-    gsd = compute_ground_sampling_distance(focal_distance=18, sensor_width=22.3, flight_height=5, image_width=5184,
+    gsd = compute_ground_sampling_distance(focal_distance=18, sensor_width=22.3, flight_height=2, image_width=5184,
                                      image_height=3456)
-    print(gsd)
+    print("GSD = ", gsd)
 
-    max_radius = compute_expected_target_size(gsd, target_dimension=40)
-    print(max_radius)
+    max_radius = compute_max_ring_size(gsd, outer_ring_radius=40)
+    print("max_radius = ", max_radius)
+
+    min_radius = compute_min_ring_size(gsd, inner_ring_radius=1.3)
+    print("min_radius = ", min_radius)
 
     t_start = time.time()
-    sorted_circles = detect_circles(blurred, maxR=max_radius)
+    sorted_circles = detect_circles(blurred, maxR=max_radius) #, minR=min_radius)
     print(f'circle detection in {time.time() - t_start} seconds')
 
     draw_circles(sorted_circles, output)
