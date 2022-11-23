@@ -126,6 +126,7 @@ def is_similar(c1, c2, center_error, radius_error):
 
 def combined_circles(similar, strategy):
     '''
+    :param strategy:mean or biggest
     :param similar: list of similar circles
     :return: a single circle for each list, computed accorded the defined strategy
     '''
@@ -149,8 +150,8 @@ def combined_circles(similar, strategy):
 
 def get_concentric_circles(circles_input, concentric_error):
     '''
+    :param concentric_error: error allowed in pixels to consider two circles concentrical
     :param circles_input: list of circles, each circle a tuple with center and radius
-    :param center_error:
     :return: list of lists, each list has a set of concentric circles
     '''
     concent = []
@@ -180,38 +181,63 @@ def get_radii_ratios(circles_list):
 
 
 def compare_ratio_sequence(ratios_list):
-    signature = [0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.5]
+    signature = [0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.5] #NÃO DEVERIA ESTAR DEFINIDA FORA E NÃO NA FUNÇÃO?
     list_match = []
     for obs in range(0, len(ratios_list)):
         for real in range(0, len(signature)):
-            upper_lim = signature[real] + 0.025
-            lower_lim = signature[real] - 0.0249
+            upper_lim = signature[real] + 0.02
+            lower_lim = signature[real] - 0.02
             if ratios_list[obs] <= upper_lim and ratios_list[obs] >= lower_lim:
                 list_match.append([obs, real])
     return list_match
 
 
-def get_new_height(gsd, )
+def get_longest_list_of_matches(sequence_match):  # CRITÉRIO 1
+    # tamanho da maior familia
+    # seq[0] -> indice da familia no tuple
+    # seq[1] -> familia de racios
+    # len(seq[1]) -> tamanho da familia de racios
+    max_size = max(map(lambda seq: len(seq[1]), sequence_match))
+
+    # lista das familias com o maior tamanho
+    def family_is_longest(seq):
+        return len(seq[1]) == max_size
+    longest_families = list(filter(family_is_longest, sequence_match))
+
+    return longest_families
+
+
+def get_outer_match_list(longest_match_list):  # CRITÉRIO 2
+    def value_to_compare_in_seq(seq: tuple):
+        # seq[0] -> indice da familia no tuple
+        # seq[1] -> familia de racios
+        # seq[1][0] -> primeiro racio da familia de racios
+        # seq[1][0][1] -> match do primeiro racio da familia de racios
+        return seq[1][0][1]
+
+    return min(longest_match_list, key=value_to_compare_in_seq)
+
 
 def main():
-    image = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/5m/IMG_8520.JPG", 0)
-    output = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/5m/IMG_8520.JPG", 1)
+    image = cv2.imread("/media/sf_Shared_folder_Ubuntu/test.jpg", 0)
+    output = cv2.imread("/media/sf_Shared_folder_Ubuntu/test.jpg", 1)
 
     cv2.namedWindow('original image', cv2.WINDOW_KEEPRATIO)
     cv2.imshow('original image', output)
     cv2.resizeWindow('original image', 700, 700)
-    #cv2.waitKey()
+    # cv2.waitKey()
 
     blurred = cv2.GaussianBlur(image, (11, 11), 0)
     cv2.namedWindow('blurred image', cv2.WINDOW_KEEPRATIO)
     cv2.imshow('blurred image', blurred)
     cv2.resizeWindow('blurred image', 700, 700)
-    #cv2.waitKey()
+    # cv2.waitKey()
 
-    flight_height = 5
+    flight_height = 2
+    print('flight_height = ', flight_height)
     gsd = compute_ground_sampling_distance(focal_distance=18, sensor_width=22.3, flight_height=flight_height,
                                            image_width=5184, image_height=3456)
-    print("GSD = ", gsd)
+    print("gsd = ", gsd)
 
 
     params = get_parameters(flight_height, "/media/sf_Shared_folder_Ubuntu/Detection_results_v2.xlsx")
@@ -246,7 +272,6 @@ def main():
                                         radius_error=params['radius_error'], strategy='mean')
     print(unique_circles)
 
-    # Get list of concentric sets - list of lists of circles
     concentric_circles = get_concentric_circles(unique_circles, concentric_error=params['concentric_error'])
     print(concentric_circles)
 
@@ -256,6 +281,18 @@ def main():
     sequence_match = list(map(compare_ratio_sequence, radii_ratios))
     print(sequence_match)
 
+    sequence_match = [(i, seq) for i,seq in enumerate(sequence_match)]
+
+    longest_match_list = get_longest_list_of_matches(sequence_match)
+    print(longest_match_list)
+
+    if len(longest_match_list) > 1:
+        outer_match_list = get_outer_match_list(longest_match_list)
+        print(outer_match_list)
+        final_match = outer_match_list
+    else:
+        final_match = longest_match_list[0]
+    print(concentric_circles[final_match[0]])
 
 if __name__ == '__main__':
     main()
