@@ -8,18 +8,18 @@ from scipy.interpolate import interp1d
 
 def compute_ground_sampling_distance(focal_distance, sensor_width, flight_height, image_width,
                                      image_height):
-    gsd = round((sensor_width * flight_height * 100) / (focal_distance * image_width), 3)     # cm/pixel
+    gsd = round((sensor_width * flight_height * 100) / (focal_distance * image_width), 3)  # cm/pixel
     return gsd
 
 
-#def compute_max_ring_size(gsd, outer_ring_radius):
-    #max_radius = int(round((outer_ring_radius / gsd) + 10, 0))     # size in pixels (real = 40)
-    #return max_radius
+# def compute_max_ring_size(gsd, outer_ring_radius):
+# max_radius = int(round((outer_ring_radius / gsd) + 10, 0))     # size in pixels (real = 40)
+# return max_radius
 
 
-#def compute_min_ring_size(gsd, inner_ring_radius):
-    #min_radius = int(round((inner_ring_radius / gsd) - 10, 0))     # size in pixels (real = 1.3)
-    #return min_radius
+# def compute_min_ring_size(gsd, inner_ring_radius):
+# min_radius = int(round((inner_ring_radius / gsd) - 10, 0))     # size in pixels (real = 1.3)
+# return min_radius
 
 
 def get_parameters(flight_height, file_name):
@@ -57,13 +57,13 @@ def get_parameters(flight_height, file_name):
     }
 
 
-def detect_circles(im: np.ndarray, step, minR: int=0, maxR: int=0):
+def detect_circles(im: np.ndarray, step, minR: int = 0, maxR: int = 0):
     circles = []
     minR = max(minR, 0)
-    #step = 20
-    for maxR in range(minR+step, maxR, step):
+    # step = 20
+    for maxR in range(minR + step, maxR, step):
         new_circles = cv2.HoughCircles(im, cv2.HOUGH_GRADIENT, 1, 100,
-                                   param1=100, param2=100, minRadius=minR, maxRadius=maxR)
+                                       param1=100, param2=100, minRadius=minR, maxRadius=maxR)
         minR += step
         if new_circles is not None:
             circles.extend(new_circles[0].tolist())
@@ -74,7 +74,7 @@ def detect_circles(im: np.ndarray, step, minR: int=0, maxR: int=0):
 def draw_circles(circles, im):
     for c in circles:
         c = list(map(int, c))
-        x,y,r = c
+        x, y, r = c
         # Draw the circle in the output image
         cv2.circle(im, (x, y), r, (0, 255, 0), 1)
         # Draw a rectangle(center) in the output image
@@ -181,7 +181,7 @@ def get_radii_ratios(circles_list):
 
 
 def compare_ratio_sequence(ratios_list):
-    signature = [0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.5] #NÃO DEVERIA ESTAR DEFINIDA FORA E NÃO NA FUNÇÃO?
+    signature = [0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.5]  # (definir fora da função)
     list_match = []
     for obs in range(0, len(ratios_list)):
         for real in range(0, len(signature)):
@@ -193,15 +193,16 @@ def compare_ratio_sequence(ratios_list):
 
 
 def get_longest_list_of_matches(sequence_match):  # CRITÉRIO 1
-    # tamanho da maior familia
-    # seq[0] -> indice da familia no tuple
-    # seq[1] -> familia de racios
-    # len(seq[1]) -> tamanho da familia de racios
+    # tamanho da maior família
+    # seq[0] -> índice da família no tuple
+    # seq[1] -> família de rácios
+    # len(seq[1]) -> tamanho da família de rácios
     max_size = max(map(lambda seq: len(seq[1]), sequence_match))
 
-    # lista das familias com o maior tamanho
+    # lista das famílias com o maior tamanho
     def family_is_longest(seq):
         return len(seq[1]) == max_size
+
     longest_families = list(filter(family_is_longest, sequence_match))
 
     return longest_families
@@ -209,18 +210,53 @@ def get_longest_list_of_matches(sequence_match):  # CRITÉRIO 1
 
 def get_outer_match_list(longest_match_list):  # CRITÉRIO 2
     def value_to_compare_in_seq(seq: tuple):
-        # seq[0] -> indice da familia no tuple
-        # seq[1] -> familia de racios
-        # seq[1][0] -> primeiro racio da familia de racios
-        # seq[1][0][1] -> match do primeiro racio da familia de racios
+        # seq[0] -> índice da família no tuple
+        # seq[1] -> família de rácios
+        # seq[1][0] -> primeiro rácio da família de rácios
+        # seq[1][0][1] -> match do primeiro rácio da família de rácios
         return seq[1][0][1]
 
     return min(longest_match_list, key=value_to_compare_in_seq)
 
 
+def get_new_height(ratios_match, px_radii, focal_distance, image_width, sensor_width): #tenho de chamar aqui os parametros da camara que uso na funcção dentro desta?
+    # lista com dimensões reais dos raios (definir fora da função)
+    real_radii = [39.5, 35.5, 30, 24, 18, 12.5, 8.25, 5, 2.7, 1.35]
+    final_duplicate_real_radii = []
+    final_real_list = []
+
+    for (px_ratio_i, real_ratio_i) in ratios_match:
+        final_duplicate_real_radii.append(real_radii[real_ratio_i])
+        final_duplicate_real_radii.append(real_radii[real_ratio_i + 1])
+
+    for radii in final_duplicate_real_radii:
+        if radii not in final_real_list:
+            final_real_list.append(radii)
+
+    if len(final_real_list) != len(px_radii):
+        raise ValueError('Lengths do not match')
+
+    heights = []
+    for (px_radii, real_radii) in zip(px_radii, final_real_list):
+        height = get_height(focal_distance, image_width, sensor_width, real=real_radii, px=px_radii)           # devo chamar esta função dentro da função anterior?
+        heights.append(height)
+
+    average_height = sum(heights) / len(heights)
+
+    return average_height
+
+
+def get_height(focal_distance, image_width, sensor_width, real, px):
+
+    new_gsd = real / px        # new_gsd = (radius_in_cms / radius_in_pixels)
+    flight_height = (new_gsd * focal_distance * image_width) / (sensor_width * 100)
+
+    return flight_height
+
+
 def main():
-    image = cv2.imread("/media/sf_Shared_folder_Ubuntu/test.jpg", 0)
-    output = cv2.imread("/media/sf_Shared_folder_Ubuntu/test.jpg", 1)
+    image = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/5m/IMG_8520.JPG", 0)
+    output = cv2.imread("/media/sf_Shared_folder_Ubuntu/Photo_database/0_angle/5m/IMG_8520.JPG", 1)
 
     cv2.namedWindow('original image', cv2.WINDOW_KEEPRATIO)
     cv2.imshow('original image', output)
@@ -233,12 +269,17 @@ def main():
     cv2.resizeWindow('blurred image', 700, 700)
     # cv2.waitKey()
 
-    flight_height = 2
+    flight_height = 5
+    focal_distance = 18
+    sensor_width = 22.3
+    image_width = 5184
+    image_height = 3456
     print('flight_height = ', flight_height)
-    gsd = compute_ground_sampling_distance(focal_distance=18, sensor_width=22.3, flight_height=flight_height,
-                                           image_width=5184, image_height=3456)
-    print("gsd = ", gsd)
 
+    gsd = compute_ground_sampling_distance(focal_distance=focal_distance, sensor_width=sensor_width,
+                                           flight_height=flight_height,image_width=image_width,
+                                           image_height=image_height)
+    print("gsd = ", gsd)
 
     params = get_parameters(flight_height, "/media/sf_Shared_folder_Ubuntu/Detection_results_v2.xlsx")
     params['min_radius']
@@ -281,7 +322,7 @@ def main():
     sequence_match = list(map(compare_ratio_sequence, radii_ratios))
     print(sequence_match)
 
-    sequence_match = [(i, seq) for i,seq in enumerate(sequence_match)]
+    sequence_match = [(i, seq) for i, seq in enumerate(sequence_match)]
 
     longest_match_list = get_longest_list_of_matches(sequence_match)
     print(longest_match_list)
@@ -292,7 +333,18 @@ def main():
         final_match = outer_match_list
     else:
         final_match = longest_match_list[0]
-    print(concentric_circles[final_match[0]])
+    final_match_list = concentric_circles[final_match[0]]
+    print(final_match_list)
+
+    # transformar final_match_list em lista com raios apenas
+    radii_list = []
+    for tuple in final_match_list:
+        radii_list.append(tuple[2])
+
+    new_height = get_new_height(px_radii=radii_list, ratios_match=final_match[1], focal_distance=focal_distance,
+                                image_width=image_width, sensor_width=sensor_width)
+    print(new_height)
+
 
 if __name__ == '__main__':
     main()
